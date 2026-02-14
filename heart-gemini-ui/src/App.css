@@ -1,0 +1,117 @@
+/* ---------- GLOBAL ---------- */
+body {
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+/* ---------- APP LAYOUT ---------- */
+.app {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ---------- TITLE ---------- */
+.app-title {
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: #c9184a;
+  margin-bottom: 20px;
+}
+
+/* ---------- INPUT ---------- */
+.bpm-input {
+  padding: 14px 18px;
+  border-radius: 999px;
+  border: 2px solid #ffb3c1;
+  font-size: 1rem;
+  width: 240px;
+  text-align: center;
+  margin-bottom: 16px;
+  outline: none;
+  background: white;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bpm-input:focus {
+  border-color: #ff4d6d;
+  box-shadow: 0 0 0 4px rgba(255, 77, 109, 0.15);
+}
+
+/* ---------- BUTTON ---------- */
+.heart-button {
+  background: linear-gradient(135deg, #ff4d6d, #ff758f);
+  color: white;
+  border: none;
+  border-radius: 999px;
+  padding: 14px 28px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 28px;
+  box-shadow: 0 10px 25px rgba(255, 77, 109, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.heart-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(255, 77, 109, 0.45);
+}
+
+/* ---------- CARD ---------- */
+.card {
+  background: white;
+  border-radius: 24px;
+  padding: 26px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  animation: fadeUp 0.4s ease;
+}
+
+/* ---------- CARD CONTENT ---------- */
+.card-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #c9184a;
+  margin-bottom: 12px;
+}
+
+.card-insight {
+  font-size: 1rem;
+  color: #444;
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+/* ---------- STEPS ---------- */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.step {
+  background: #fff0f3;
+  padding: 12px 16px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  color: #590d22;
+  display: flex;
+  align-items: center;
+}
+
+/* ---------- ANIMATION ---------- */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
