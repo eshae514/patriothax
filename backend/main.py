@@ -1,110 +1,131 @@
+# main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from google import genai
+import serial, threading, time, re, os
+from fastapi.responses import StreamingResponse
+import asyncio
+import json
 
 # --------------------
-# SETUP
+# GEMINI SETUP
 # --------------------
+client = genai.Client(api_key=os.getenv("GENAI_API_KEY"))
 
-client = genai.Client(api_key="AIzaSyA3l1vHt-mDOHNoAq7vEnLNDTcwHiuD36I")
-
+# --------------------
+# FASTAPI SETUP
+# --------------------
 app = FastAPI(title="Heartbeat AI Coach")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # OK for hackathon
-    allow_credentials=True,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # --------------------
-# REQUEST MODEL
+# HEART RATE STATE
 # --------------------
-
-class HeartbeatRequest(BaseModel):
-    bpm: int
-
-# --------------------
-# PARSER
-# --------------------
-
-def parse_ai_response(text: str):
-    sections = {
-        "title": "",
-        "insight": "",
-        "steps": []
-    }
-
-    current = None
-
-    for line in text.splitlines():
-        line = line.strip()
-
-        if line.startswith("Title:"):
-            sections["title"] = line.replace("Title:", "").strip()
-
-        elif line.startswith("Insight:"):
-            current = "insight"
-            sections["insight"] = line.replace("Insight:", "").strip()
-
-        elif line.startswith("Action Steps:"):
-            current = "steps"
-
-        elif line.startswith("-") and current == "steps":
-            sections["steps"].append(line[1:].strip())
-
-    return sections
+latest_bpm = None
+bpm_history = []
+measuring = False
+start_time = 0
+MEASURE_DURATION = 10000  # 10 seconds after finger detected
 
 # --------------------
-# ENDPOINT
+# SERIAL THREAD
 # --------------------
+def read_arduino():
+    global latest_bpm, bpm_history, measuring, start_time
+    try:
+        ser = serial.Serial("COM8", 115200, timeout=1)
+        time.sleep(2)
+        print("Connected to Arduino")
 
-@app.post("/generate")
-async def generate_advice(request: HeartbeatRequest):
-    bpm = request.bpm
+        while True:
+            line = ser.readline().decode(errors="ignore").strip()
+            match = re.search(r"BPM:\s*(\d+\.?\d*)", line)
+            if match:
+                bpm = float(match.group(1))
+                latest_bpm = bpm
 
-    prompt = f"""
-You are an educational support assistant for students.
+                if measuring:
+                    bpm_history.append({"time": time.time() - start_time, "bpm": bpm})
 
-Context:
-- Hackathon education project
-- Student heart rate: {bpm} BPM
-- Goal: help with focus, studying, or test readiness
-- No medical advice
+    except Exception as e:
+        print("Serial error:", e)
 
-Output format:
+threading.Thread(target=read_arduino, daemon=True).start()
+
+# --------------------
+# STREAMING BPM
+# --------------------
+@app.get("/bpm_stream")
+async def bpm_stream():
+    global measuring, start_time, bpm_history
+
+    # Reset for a new measurement
+    bpm_history = []
+    measuring = True
+    start_time = time.time()
+
+    async def event_generator():
+        global measuring
+        while measuring:
+            if latest_bpm:
+                yield f"data:{json.dumps({'bpm': latest_bpm})}\n\n"
+            await asyncio.sleep(0.1)  # 10 updates per second
+
+            # Stop after MEASURE_DURATION
+            if time.time() - start_time >= MEASURE_DURATION / 1000:
+                measuring = False
+
+        # After measurement, send AI advice
+        avg_bpm = sum([d['bpm'] for d in bpm_history])/len(bpm_history) if bpm_history else 0
+        stress = "stressed" if avg_bpm > 90 else "relaxed"
+
+        prompt = f"""
+You are a student support AI.
+Heart rate average over 10 seconds: {avg_bpm} BPM.
+The student seems {stress}.
+
+Give ONE insight and THREE short study actions.
+Format:
 Title:
 Insight:
-Action Steps:
 - Step 1
 - Step 2
 - Step 3
-
-Rules:
-- Max 6 sentences total
-- Supportive, calm, student-friendly
 """
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt
-    )
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt
+            )
+            text = response.text
+        except Exception as e:
+            print("Gemini error:", e)
+            text = """Title: Heartbeat Detected
+Insight: AI unavailable, but measurement finished.
+- Take a slow breath
+- Relax your shoulders
+- Try again later
+"""
 
-    parsed = parse_ai_response(response.text)
+        # Parse AI output
+        out = {"title": "", "insight": "", "steps": []}
+        current = None
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith("Title:"):
+                out["title"] = line[6:].strip()
+            elif line.startswith("Insight:"):
+                out["insight"] = line[8:].strip()
+            elif line.startswith("-"):
+                out["steps"].append(line[1:].strip())
 
-    return {
-        "bpm": bpm,
-        "title": parsed["title"],
-        "insight": parsed["insight"],
-        "steps": parsed["steps"]
-    }
+        yield f"data:{json.dumps({'ai': out})}\n\n"
 
-# --------------------
-# HEALTH CHECK
-# --------------------
-
-@app.get("/")
-def root():
-    return {"status": "Heartbeat AI Coach running"}
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

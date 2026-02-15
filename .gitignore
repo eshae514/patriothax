@@ -1,0 +1,7 @@
+backend/.env
+backend/venv/
+backend/.venv/
+backend/pycache/
+*.pyc
+
+heart-gemini-ui/node_modules/
